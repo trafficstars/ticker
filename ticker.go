@@ -4,6 +4,14 @@ package ticker
 
 import (
 	"time"
+	"sync/atomic"
+)
+
+const (
+	status_stopped = iota
+	status_running
+	status_runned
+	status_stopping
 )
 
 type ticker struct {
@@ -11,21 +19,26 @@ type ticker struct {
 	C chan time.Time
 	stopSignal chan struct{}
 	lastTriggerTime time.Time
-	runned bool
+	status uint32
 }
 
 func New(interval time.Duration) *ticker {
 	result := &ticker{}
 	result.C = make(chan time.Time)
 	result.stopSignal = make(chan struct{})
+	result.status = status_stopped
 	result.start(interval)
 	return result
 }
 
 func (ticker *ticker) start(interval time.Duration) {
+	if !atomic.CompareAndSwapUint32(&ticker.status, status_stopped, status_running) {
+		return
+	}
 	ticker.lastTriggerTime = time.Now()
 	ticker.ticker = time.NewTicker(interval)
 	ticker.run()
+	atomic.StoreUint32(&ticker.status, status_runned)
 }
 
 func (ticker *ticker) run() {
@@ -55,9 +68,13 @@ func (ticker *ticker) flushChan() {
 }
 
 func (ticker *ticker) stop() {
+	if !atomic.CompareAndSwapUint32(&ticker.status, status_runned, status_stopping) {
+		return
+	}
 	ticker.flushChan()
 	ticker.stopSignal <- struct{}{}
 	ticker.ticker.Stop()
+	atomic.StoreUint32(&ticker.status, status_stopped)
 }
 
 func (ticker *ticker) Stop() {

@@ -22,6 +22,8 @@ func TestRestart(t *testing.T) {
 		t.Errorf("Did not get a tick, but expected to (#0)")
 	}
 
+	ticker.Stop() // this's here to test how Restart() will work if the ticker is already stopped
+
 	ticker.Restart(200 * time.Millisecond)
 	time.Sleep(110*time.Millisecond)
 	select {
